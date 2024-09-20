@@ -9,7 +9,7 @@ import { exec } from 'child_process'
 import fetch from 'node-fetch'
 
 import type { SpeakerPlatform } from './SpeakerPlatform.js'
-import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js'
+import { playClassicRadio } from './utils.js'
 
 enum Power {
   ON = 'ON',
@@ -58,13 +58,16 @@ const FIXED_ID = 'fixed:qb-house:smart-speaker'
 
 export class SpeakerAccessory {
   public accessory!: PlatformAccessory
-  private service!: Service
+  private tvService!: Service
+  private speakerService!: Service
   private state = {
     power: Power.OFF as Power,
     mute: Mute.OFF as Mute,
     volume: 50 as number,
     status: VolumioStatus.STOP as VolumioStatus,
+    identifier: 999999, // 999999 is a special value to indicate no input
   }
+  private identifiers = new Map<number, Record<string, string>>()
   private VOLUMIO_HOST!: string
 
   constructor(
@@ -88,31 +91,41 @@ export class SpeakerAccessory {
       this.accessory = new this.platform.api.platformAccessory(
         this.configs.name as string,
         uuid,
-        Categories.SPEAKER,
       )
+
+      this.accessory.displayName = this.configs.name as string
+      this.accessory.category = Categories.TV_SET_TOP_BOX
+
       this.accessory.context.device = this.configs
-      this.platform.api.registerPlatformAccessories(
-        PLUGIN_NAME,
-        PLATFORM_NAME,
+      this.platform.api.publishExternalAccessories(
+        this.configs.name as string,
         [this.accessory],
       )
     }
 
-    this.accessory
+    const informationService = this.accessory
       .getService(this.platform.Service.AccessoryInformation)!
       .setCharacteristic(this.platform.Characteristic.SerialNumber, FIXED_ID)
 
-    this.service =
-      this.accessory.getService(this.platform.Service.Speaker) ||
-      this.accessory.addService(this.platform.Service.Speaker)
+    this.tvService =
+      this.accessory.getService(this.platform.Service.Television) ||
+      this.accessory.addService(this.platform.Service.Television)
 
-    this.service.setCharacteristic(
-      this.platform.Characteristic.Name,
-      this.configs.name as string,
-    )
+    this.tvService
+      .setCharacteristic(
+        this.platform.Characteristic.ConfiguredName,
+        this.configs.name as string,
+      )
+      .setCharacteristic(
+        this.platform.Characteristic.Name,
+        this.configs.name as string,
+      )
+      .setCharacteristic(
+        this.platform.Characteristic.SleepDiscoveryMode,
+        this.platform.Characteristic.SleepDiscoveryMode.ALWAYS_DISCOVERABLE,
+      )
 
-    
-    this.service
+    this.tvService
       .getCharacteristic(this.platform.Characteristic.Active)
       .onSet(async (value) => {
         const newState = value ? Power.ON : Power.OFF
@@ -122,15 +135,39 @@ export class SpeakerAccessory {
         }
       })
       .onGet(() => this.state.power === Power.ON)
-    
-    /*
-    this.service
+
+    this.tvService
       .getCharacteristic(this.platform.Characteristic.CurrentMediaState)
       .onGet(() =>
         this.convertVolumioStatusToCharacteristicValue(this.state.status),
       )
 
-    this.service
+    this.tvService
+      .getCharacteristic(this.platform.Characteristic.ActiveIdentifier)
+      .onSet((value) => {
+        const identifier = value as number
+        if (this.identifiers.has(identifier)) {
+          this.state.identifier = identifier
+          const channel = this.identifiers.get(identifier)
+
+          if (channel?.application) {
+            if (channel.application === 'Off') {
+              this.state.status = VolumioStatus.STOP
+              fetch(`${this.VOLUMIO_HOST}/api/v1/commands/?cmd=stop`, {
+                method: 'GET',
+                headers: {
+                  Accept: 'application/json',
+                },
+              })
+            } else if (channel.application === '愛樂電台') {
+              playClassicRadio(this.VOLUMIO_HOST)
+            }
+          }
+        }
+      })
+      .onGet(() => this.state.identifier)
+
+    this.tvService
       .getCharacteristic(this.platform.Characteristic.TargetMediaState)
       .onSet(async (value) => {
         const newState = this.convertCharacteristicValueToVolumioStatus(value)
@@ -147,9 +184,22 @@ export class SpeakerAccessory {
       .onSet(() =>
         this.convertVolumioStatusToCharacteristicValue(this.state.status),
       )
-    */
 
-    this.service
+    this.speakerService =
+      this.accessory.getService(this.platform.Service.TelevisionSpeaker) ||
+      this.accessory.addService(this.platform.Service.TelevisionSpeaker)
+
+    this.speakerService
+      .setCharacteristic(
+        this.platform.Characteristic.ConfiguredName,
+        this.configs.name + ' Speaker',
+      )
+      .setCharacteristic(
+        this.platform.Characteristic.Name,
+        this.configs.name + ' Speaker',
+      )
+
+    this.speakerService
       .getCharacteristic(this.platform.Characteristic.Mute)
       .onSet(async (value) => {
         const newState = value ? Mute.ON : Mute.OFF
@@ -182,7 +232,38 @@ export class SpeakerAccessory {
       })
       .onGet(() => this.state.mute === Mute.ON)
 
-    this.service
+    this.speakerService.setCharacteristic(
+      this.platform.Characteristic.VolumeControlType,
+      this.platform.Characteristic.VolumeControlType.ABSOLUTE,
+    )
+
+    this.speakerService
+      .getCharacteristic(this.platform.Characteristic.VolumeSelector)
+      .onSet(async (value) => {
+        if (value === this.platform.Characteristic.VolumeSelector.INCREMENT) {
+          this.state.volume += 5
+        } else {
+          this.state.volume -= 5
+        }
+
+        if (this.state.volume > 100) {
+          this.state.volume = 100
+        } else if (this.state.volume < 0) {
+          this.state.volume = 0
+        }
+
+        fetch(
+          `${this.VOLUMIO_HOST}/api/v1/commands/?cmd=volume&volume=${this.state.volume}`,
+          {
+            method: 'GET',
+            headers: {
+              Accept: 'application/json',
+            },
+          },
+        )
+      })
+
+    this.speakerService
       .getCharacteristic(this.platform.Characteristic.Volume)
       .onSet(async (value) => {
         this.state.volume = value as number
@@ -197,6 +278,12 @@ export class SpeakerAccessory {
         )
       })
       .onGet(() => this.state.volume)
+
+    this.tvService.addLinkedService(informationService)
+    this.tvService.addLinkedService(this.speakerService)
+
+    this.setupApplication('Off')
+    this.setupApplication('愛樂電台')
 
     this.syncVolumioState()
   }
@@ -217,24 +304,22 @@ export class SpeakerAccessory {
         const state = _state as VolumioState
 
         this.state.mute = state.mute ? Mute.ON : Mute.OFF
-        this.service.updateCharacteristic(
+        this.speakerService.updateCharacteristic(
           this.platform.Characteristic.Mute,
           this.state.mute === Mute.ON,
         )
 
         this.state.volume = state.volume
-        this.service.updateCharacteristic(
+        this.speakerService.updateCharacteristic(
           this.platform.Characteristic.Volume,
           this.state.volume,
         )
 
-        /*
         this.state.status = state.status
-        this.service.updateCharacteristic(
+        this.tvService.updateCharacteristic(
           this.platform.Characteristic.CurrentMediaState,
           this.convertVolumioStatusToCharacteristicValue(this.state.status),
         )
-        */
       })
       .catch(() => {
         this.platform.log.error('Cannot get volumio state')
@@ -263,5 +348,44 @@ export class SpeakerAccessory {
       default:
         return VolumioStatus.STOP
     }
+  }
+
+  setupApplication(application: string) {
+    const identifier = this.identifiers.size
+    this.identifiers.set(identifier, { application })
+
+    const service = new this.platform.Service.InputSource(
+      this.accessory.displayName + application,
+      application,
+    )
+    service.setCharacteristic(
+      this.platform.Characteristic.Identifier,
+      identifier,
+    )
+    service.setCharacteristic(
+      this.platform.Characteristic.ConfiguredName,
+      application,
+    )
+    service.setCharacteristic(
+      this.platform.Characteristic.IsConfigured,
+      this.platform.Characteristic.IsConfigured.CONFIGURED,
+    )
+    service.setCharacteristic(
+      this.platform.Characteristic.InputSourceType,
+      this.platform.Characteristic.InputSourceType.OTHER,
+    )
+    service.setCharacteristic(
+      this.platform.Characteristic.CurrentVisibilityState,
+      this.platform.Characteristic.CurrentVisibilityState.SHOWN,
+    )
+
+    service
+      .getCharacteristic(this.platform.Characteristic.ConfiguredName)
+      .on('set', (name, callback) => {
+        callback(null, name)
+      })
+
+    this.accessory.addService(service)
+    this.tvService!.addLinkedService(service)
   }
 }

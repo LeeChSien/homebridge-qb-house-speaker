@@ -1,6 +1,6 @@
 import fetch from 'node-fetch'
 
-export function playClassicRadio(volumeHost: string) {
+export function playClassicRadio(host: string) {
   const PLAYLIST_REGX =
     /'https:\/\/eclassicalradiow-hichannel.cdn.hinet.net\/live\/RA000018\/playlist.m3u8\?token=(.*)&expires=\d+'/g
 
@@ -24,7 +24,7 @@ export function playClassicRadio(volumeHost: string) {
         return
       }
 
-      fetch(`http://${volumeHost}/api/v1/replaceAndPlay`, {
+      fetch(`http://${host}/api/v1/replaceAndPlay`, {
         method: 'POST',
         headers: {
           Accept: 'application/json',

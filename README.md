@@ -1,4 +1,9 @@
-# homebridge-qb-house-speake
+# homebridge-qb-house-speaker
+
+## Prerequisite
+
+1. Install LIRC on your device ([ref](https://devkimchi.com/2020/08/12/turning-raspberry-pi-into-remote-controller/))
+2. Copy lirc configs from `./lirc` to `/etc/lirc/lircd.conf.d/`
 
 ## Usage
 
@@ -6,7 +11,8 @@
 "platforms": [
   {
     "platform": "QBHouseSpeaker",
-    "name": "My Speaker"
+    "name": "QB House Speaker",
+    "host": "192.168.11.48"
   }
 ]
 ```

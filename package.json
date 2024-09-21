@@ -3,17 +3,16 @@
   "displayName": "QB House Speaker",
   "type": "module",
   "version": "0.0.1",
-  "private": true,
   "description": "QB House Speaker",
   "author": "Jason Lee",
   "license": "Apache-2.0",
-  "homepage": "https://github.com/USERNAME/GITHUB_PROJECT_NAME#readme",
+  "homepage": "https://github.com/LeeChSien/homebridge-qb-house-speaker",
   "repository": {
     "type": "git",
-    "url": "https://github.com/USERNAME/GITHUB_PROJECT_NAME.git"
+    "url": "https://github.com/LeeChSien/homebridge-qb-house-speaker.git"
   },
   "bugs": {
-    "url": "https://github.com/USERNAME/GITHUB_PROJECT_NAME/issues"
+    "url": "https://github.com/LeeChSien/homebridge-qb-house-speaker/issues"
   },
   "keywords": [
     "homebridge-plugin"
@@ -28,16 +27,13 @@
     "lint": "eslint . --max-warnings=0",
     "prepublishOnly": "npm run lint && npm run build",
     "watch": "npm run build && npm link && nodemon",
-    "test": "jest --passWithNoTests",
-    "play": "node ./dist/playground.js"
+    "test": "jest --passWithNoTests"
   },
   "devDependencies": {
     "@eslint/js": "^9.9.0",
-    "@types/crypto-js": "^4.2.2",
     "@types/eslint__js": "^8.42.3",
     "@types/jest": "^29.5.12",
     "@types/node": "^22.2.0",
-    "@types/xml2js": "^0.4.14",
     "eslint": "^9.9.0",
     "eslint-config-prettier": "^9.1.0",
     "homebridge": "^2.0.0-beta.0",

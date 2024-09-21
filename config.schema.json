@@ -1,5 +1,5 @@
 {
-  "pluginAlias": "ExampleHomebridgePlugin",
+  "pluginAlias": "QBHouseSpeaker",
   "pluginType": "platform",
   "singular": true,
   "schema": {
@@ -9,7 +9,13 @@
         "title": "Name",
         "type": "string",
         "required": true,
-        "default": "Example Dynamic Platform"
+        "default": "QB House Speaker"
+      },
+      "host": {
+        "title": "Name",
+        "type": "string",
+        "required": true,
+        "default": "192.168.11.48"
       }
     }
   }

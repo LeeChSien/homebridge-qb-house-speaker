@@ -10,54 +10,12 @@ import fetch from 'node-fetch'
 
 import type { SpeakerPlatform } from './SpeakerPlatform.js'
 import { playClassicRadio } from './utils.js'
-
-enum Power {
-  ON = 'ON',
-  OFF = 'OFF',
-}
-
-enum Mute {
-  ON = 'ON',
-  OFF = 'OFF',
-}
-
-enum VolumioStatus {
-  PLAY = 'play',
-  PAUSE = 'pause',
-  STOP = 'stop',
-}
-
-interface VolumioState {
-  mute: boolean
-  status: VolumioStatus
-  volume: number
-  album?: string
-  albumart?: string
-  artist?: string
-  bitdepth?: string
-  channels?: number
-  consume?: boolean
-  disableVolumeControl?: boolean
-  duration?: number
-  position?: number
-  random?: boolean
-  repeat?: boolean
-  repeatSingle?: boolean
-  samplerate?: string
-  seek?: number
-  service?: string
-  stream?: string | boolean
-  title?: string
-  trackType?: string
-  updatedb?: boolean
-  uri?: string
-  volatile?: boolean
-}
-
-const FIXED_ID = 'fixed:qb-house:smart-speaker'
+import { Power, Mute, VolumioState, VolumioStatus } from './types.js'
+import { FIXED_ID } from './settings.js'
 
 export class SpeakerAccessory {
   public accessory!: PlatformAccessory
+  private host!: string
   private tvService!: Service
   private speakerService!: Service
   private state = {
@@ -68,18 +26,17 @@ export class SpeakerAccessory {
     identifier: 999999, // 999999 is a special value to indicate no input
   }
   private identifiers = new Map<number, Record<string, string>>()
-  private VOLUMIO_HOST!: string
 
   constructor(
     private readonly platform: SpeakerPlatform,
     private readonly configs: PlatformConfig,
   ) {
-    // don nothing.
+    // do nothing.
   }
 
   async init() {
     const uuid = this.platform.api.hap.uuid.generate(FIXED_ID)
-    this.VOLUMIO_HOST = this.configs.volumeHost as string
+    this.host = this.configs.host as string
 
     const existingAccessory = this.platform.accessories.find(
       (accessory) => accessory.UUID === uuid,
@@ -94,7 +51,7 @@ export class SpeakerAccessory {
       )
 
       this.accessory.displayName = this.configs.name as string
-      this.accessory.category = Categories.TV_SET_TOP_BOX
+      this.accessory.category = Categories.SPEAKER
 
       this.accessory.context.device = this.configs
       this.platform.api.publishExternalAccessories(
@@ -112,10 +69,6 @@ export class SpeakerAccessory {
       this.accessory.addService(this.platform.Service.Television)
 
     this.tvService
-      .setCharacteristic(
-        this.platform.Characteristic.ConfiguredName,
-        this.configs.name as string,
-      )
       .setCharacteristic(
         this.platform.Characteristic.Name,
         this.configs.name as string,
@@ -151,16 +104,16 @@ export class SpeakerAccessory {
           const channel = this.identifiers.get(identifier)
 
           if (channel?.application) {
-            if (channel.application === 'Off') {
+            if (channel.application === 'Stop') {
               this.state.status = VolumioStatus.STOP
-              fetch(`${this.VOLUMIO_HOST}/api/v1/commands/?cmd=stop`, {
+              fetch(`http://${this.host}/api/v1/commands/?cmd=stop`, {
                 method: 'GET',
                 headers: {
                   Accept: 'application/json',
                 },
               })
             } else if (channel.application === '愛樂電台') {
-              playClassicRadio(this.VOLUMIO_HOST)
+              playClassicRadio(this.host)
             }
           }
         }
@@ -173,7 +126,7 @@ export class SpeakerAccessory {
         const newState = this.convertCharacteristicValueToVolumioStatus(value)
         if (newState !== this.state.status) {
           this.state.status = newState
-          fetch(`${this.VOLUMIO_HOST}/api/v1/commands/?cmd=${newState}`, {
+          fetch(`http://${this.host}/api/v1/commands/?cmd=${newState}`, {
             method: 'GET',
             headers: {
               Accept: 'application/json',
@@ -189,15 +142,10 @@ export class SpeakerAccessory {
       this.accessory.getService(this.platform.Service.TelevisionSpeaker) ||
       this.accessory.addService(this.platform.Service.TelevisionSpeaker)
 
-    this.speakerService
-      .setCharacteristic(
-        this.platform.Characteristic.ConfiguredName,
-        this.configs.name + ' Speaker',
-      )
-      .setCharacteristic(
-        this.platform.Characteristic.Name,
-        this.configs.name + ' Speaker',
-      )
+    this.speakerService.setCharacteristic(
+      this.platform.Characteristic.Name,
+      this.configs.name + ' Speaker',
+    )
 
     this.speakerService
       .getCharacteristic(this.platform.Characteristic.Mute)
@@ -209,7 +157,7 @@ export class SpeakerAccessory {
 
           if (this.state.mute === Mute.ON) {
             fetch(
-              `${this.VOLUMIO_HOST}/api/v1/commands/?cmd=volume&volume=mute`,
+              `http://${this.host}/api/v1/commands/?cmd=volume&volume=mute`,
               {
                 method: 'GET',
                 headers: {
@@ -219,7 +167,7 @@ export class SpeakerAccessory {
             )
           } else {
             fetch(
-              `${this.VOLUMIO_HOST}/api/v1/commands/?cmd=volume&volume=unmute`,
+              `http://${this.host}/api/v1/commands/?cmd=volume&volume=unmute`,
               {
                 method: 'GET',
                 headers: {
@@ -253,7 +201,7 @@ export class SpeakerAccessory {
         }
 
         fetch(
-          `${this.VOLUMIO_HOST}/api/v1/commands/?cmd=volume&volume=${this.state.volume}`,
+          `http://${this.host}/api/v1/commands/?cmd=volume&volume=${this.state.volume}`,
           {
             method: 'GET',
             headers: {
@@ -268,7 +216,7 @@ export class SpeakerAccessory {
       .onSet(async (value) => {
         this.state.volume = value as number
         fetch(
-          `${this.VOLUMIO_HOST}/api/v1/commands/?cmd=volume&volume=${value}`,
+          `http://${this.host}/api/v1/commands/?cmd=volume&volume=${value}`,
           {
             method: 'GET',
             headers: {
@@ -282,18 +230,18 @@ export class SpeakerAccessory {
     this.tvService.addLinkedService(informationService)
     this.tvService.addLinkedService(this.speakerService)
 
-    this.setupApplication('Off')
+    this.setupApplication('Stop')
     this.setupApplication('愛樂電台')
 
     this.syncVolumioState()
   }
 
   syncVolumioState() {
-    if (!this.VOLUMIO_HOST) {
+    if (!this.host) {
       return
     }
 
-    fetch(`${this.VOLUMIO_HOST}/api/v1/getstate`, {
+    fetch(`http://${this.host}/api/v1/getstate`, {
       method: 'GET',
       headers: {
         Accept: 'application/json',
@@ -378,12 +326,6 @@ export class SpeakerAccessory {
       this.platform.Characteristic.CurrentVisibilityState,
       this.platform.Characteristic.CurrentVisibilityState.SHOWN,
     )
-
-    service
-      .getCharacteristic(this.platform.Characteristic.ConfiguredName)
-      .on('set', (name, callback) => {
-        callback(null, name)
-      })
 
     this.accessory.addService(service)
     this.tvService!.addLinkedService(service)

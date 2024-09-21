@@ -12,7 +12,7 @@
         "default": "QB House Speaker"
       },
       "host": {
-        "title": "Name",
+        "title": "Host",
         "type": "string",
         "required": true,
         "default": "192.168.11.48"

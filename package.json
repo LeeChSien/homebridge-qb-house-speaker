@@ -2,7 +2,7 @@
   "name": "homebridge-qb-house-speaker",
   "displayName": "QB House Speaker",
   "type": "module",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "description": "QB House Speaker",
   "author": "Jason Lee",
   "license": "Apache-2.0",
